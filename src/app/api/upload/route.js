@@ -1,17 +1,32 @@
-import { initEdgeStore } from "@edgestore/server";
-import { createEdgeStoreNextHandler } from "@edgestore/server/adapters/next/app";
-const es = initEdgeStore.create();
-/**
- * This is the main router for the Edge Store buckets.
- */
-const edgeStoreRouter = es.router({
-    publicFiles: es.fileBucket(),
-});
-const handler = createEdgeStoreNextHandler({
-    router: edgeStoreRouter,
-});
-export { handler as GET, handler as POST };
-/**
- * This type is used to create the type-safe client for the frontend.
- */
-export { edgeStoreRouter };
+import uniqid from "uniqid";
+import { UploadThing } from "uploadthing";
+
+export async function POST(req) {
+    const data = await req.formData();
+    if (data.get("file")) {
+        // upload the file
+        const file = data.get("file");
+
+        const uploadThing = new UploadThing({
+            apiKey: process.env.UPLOADTHING_SECRET,
+        });
+
+        const ext = file.name.split(".").slice(-1)[0];
+        const newFileName = uniqid() + "." + ext;
+
+        const chunks = [];
+        for await (const chunk of file.stream()) {
+            chunks.push(chunk);
+        }
+        const buffer = Buffer.concat(chunks);
+
+        const result = await uploadThing.upload({
+            file: buffer,
+            filename: newFileName,
+        });
+
+        const link = result.fileUrl;
+        return Response.json(link);
+    }
+    return Response.json(true);
+}
